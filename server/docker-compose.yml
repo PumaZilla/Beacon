@@ -1,0 +1,40 @@
+---
+version: '3.8'
+
+services:
+  reverse_proxy:
+    image: traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=beacon@domain.tld" # change this
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "certificates:/letsencrypt:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock:rw"
+
+  app:
+    image: php:7.4-apache
+    container_name: beacon
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beacon.rule=Host(`beacon.domain.tld`)" # change this
+      - "traefik.http.routers.beacon.entrypoints=websecure"
+      - "traefik.http.routers.beacon.tls=true"
+      - "traefik.http.routers.beacon.tls.certresolver=letsencrypt"
+    volumes:
+      - "./src:/var/www/html:ro"
+      - "./access.log:/var/log/apache2/access.log:rw"
+
+volumes:
+  certificates:
